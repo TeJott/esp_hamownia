@@ -15,11 +15,11 @@
 - LED: szybkie podwójne mrugnięcie (potwierdzenie)
 - Odczekaj chwilę aż wartość ustabilizuje się na 0.00 kg
 
-### Krok 2 — Nagrzewanie opony (opcjonalne)
+### Krok 2 — Zapalnik przez strone WEB (opcjonalne)
 - Ustaw czas grzania i moc PWM w web UI
 - Kliknij **START HEATER** lub przytrzymaj przycisk (long press)
-- LED: szybkie mrugnięcia — odliczanie | przeważnie ON — grzanie
-- Grzejnik automatycznie wyłącza się po upływie czasu
+- LED: szybkie mrugnięcia — odliczanie 
+- Zapalnik automatycznie wyłącza się po upływie czasu
 
 ### Krok 3 — Nagrywanie
 - Kliknij **START RECORDING** w web UI
