@@ -1,6 +1,6 @@
-# 🔥 ESP Hamownia — Silnikowa Podłogowa Hamownia na ESP32-C3
+# 🔥 ESP Hamownia — Tester ziągu silników rakietowych na ESP32-C3
 
-> Przenośna hamownia silnikowa z podgrzewaniem opon, odczytem siły przez ogniwo tensometryczne HX711, wyświetlaczem OLED, kartą SD i interfejsem webowym przez Wi-Fi.
+> Przenośna hamownia silnikowa z zapalnikie, odczytem siły przez blok tensometryczny 20kg ze wzacniacze HX711, wyświetlaczem OLED, kartą SD i interfejsem webowym przez Wi-Fi.
 
 ---
 
@@ -44,12 +44,12 @@ docs/images/schematic.png
 
 ESP Hamownia to autonomiczne urządzenie do pomiaru siły napędowej silnika elektrycznego lub spalinowego na stanowisku podłogowym. Urządzenie:
 
-- **Mierzy siłę** (w kg) za pomocą tensometru i wzmacniacza HX711
-- **Podgrzewa opony** sterowanym grzejnikiem PWM (MOSFET) przed testem
+- **Mierzy siłę** (w N) za pomocą tensometru i wzmacniacza HX711
+- **Zapala silnik** sterowanym drucikiem khantal 0.3mm PWM (MOSFET) przed testem
 - **Zapisuje wyniki** na karcie SD jako pliki CSV
 - **Wyświetla dane** na ekranie OLED 128×64
 - **Udostępnia panel webowy** przez Wi-Fi (STA lub AP fallback)
-- **Monitoruje napięcia** dwóch niezależnych baterii (logiczna + grzejnik)
+- **Monitoruje napięcia** dwóch niezależnych baterii (logiczna + zapalnik)
 
 ---
 
@@ -60,12 +60,12 @@ ESP Hamownia to autonomiczne urządzenie do pomiaru siły napędowej silnika ele
 | Mikrokontroler | ESP32-C3 SuperMini |
 | Czujnik siły | Tensometr + HX711 (Gain 128) |
 | Wyświetlacz | OLED SSD1306, 128×64, I2C 0x3C |
-| Pamięć | Karta SD (SPI) |
-| Sterowanie grzejnikiem | MOSFET PWM, 1kHz, 8-bit |
+| Pamięć | Karta SD (SPI) TF Micro card reader |
+| Sterowanie zapalnikiem  | MOSFET PWM, 1kHz, 8-bit |
 | Przycisk | 1× fizyczny (GPIO2, active LOW) |
 | LED statusu | 1× zielona (active LOW, GPIO5) |
 | Zasilanie logiki | LiPo/Li-Ion (monitoring przez ADC) |
-| Zasilanie grzejnika | 12V+ (monitoring przez ADC) |
+| Zasilanie zapalnika | 18650 (monitoring przez ADC2) |
 | Interfejs webowy | HTTP (port 80) + WebSocket (port 81) |
 
 ---
@@ -156,7 +156,7 @@ Urządzenie monitoruje dwa niezależne źródła zasilania:
 | Źródło | Próg ostrzeżenia | Akcja przy niskim napięciu |
 |---|---|---|
 | Bateria logiki (3.3V system) | < 3.3V | Ostrzeżenie LED + OLED |
-| Bateria grzejnika (12V+) | < 10.0V | Blokada grzejnika |
+| Bateria zapalnika (3.7V)  |
 
 **Korekcja ADC ESP32-C3:**
 - GPIO0 (logika): korekta `−0.33V` (ADC czyta za nisko)
