@@ -17,22 +17,20 @@
 #include <Adafruit_SSD1306.h>
 #include <HX711.h>
 #include <ArduinoJson.h>
+#include "config.h"
 
 // ============================================================
 //  KONFIGURACJA
 // ============================================================
-const char* WIFI_SSID = "UPC4538092";
-const char* WIFI_PASS = "zbkh8twXvmm5";
-
 float CALIBRATION_FACTOR = -420.0f;
 
 const float BAT_LOW_V = 3.5f;
 const float BAT_CRIT_V = 3.3f;
 const float VIN_LOW_V = 11.5f;
 
-unsigned long heaterMaxOnMs = 10000;
-int heaterPwmDuty = 100;
-unsigned long HEATER_COUNTDOWN_MS = 5000;
+unsigned long heaterMaxOnMs = HEATER_DEFAULT_DURATION_MS;
+int heaterPwmDuty = HEATER_DEFAULT_DUTY_PERCENT;
+unsigned long HEATER_COUNTDOWN_MS = (unsigned long)HEATER_DEFAULT_COUNTDOWN_S * 1000;
 
 // ============================================================
 //  PINY
@@ -134,6 +132,8 @@ AsyncWebSocket ws("/ws");
 unsigned long wsPushTimer = 0, wifiConnectStart = 0;
 bool wifiConnected = false;
 String localIP = "";
+
+char indexHtmlBuffer[5000];
 
 // ============================================================
 //  LED
@@ -383,138 +383,137 @@ void oledBootLine(const char* msg, int line, bool ok = true) {
 }
 
 // ============================================================
-//  HTML (constant PROGMEM)
+//  HTML TEMPLATE - values injected via snprintf
 // ============================================================
-const char INDEX_HTML[] PROGMEM = R"rawhtml(
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hamownia</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:sans-serif;background:#0f0f0f;color:#e0e0e0;padding:12px}
-h1{font-size:1.3rem;margin-bottom:10px;color:#4fc}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px}
-.full{grid-column:1/-1}
-.card{background:#1a1a1a;border-radius:8px;padding:10px}
-.card h2{font-size:.65rem;color:#666;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
-.val{font-size:1.9rem;font-weight:700;color:#4fc;font-variant-numeric:tabular-nums}
-.val.warn{color:#f90}.val.danger{color:#f44}
-.val.impulse{color:#fa0;font-size:2.2rem}.val.cls{color:#d8a;font-size:2.4rem}
-canvas{width:100%;height:190px;background:#111;border-radius:6px;display:block;margin-top:6px}
-.btns{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-button{padding:10px 16px;border:none;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600;color:#fff;transition:opacity .15s}
-button:active{opacity:.6}
-.btn-tare{background:#267}.btn-start{background:#246}.btn-stop{background:#622}
-#btnHeat{background:#853;min-width:150px}
-#btnHeat.cdn{background:#a60;animation:pulse .4s infinite alternate}
-#btnHeat.on{background:#f50;animation:pulse .2s infinite alternate}
-@keyframes pulse{from{opacity:.55}to{opacity:1}}
-#stbar{font-size:.8rem;padding:5px 10px;background:#1a1a1a;border-radius:6px;margin-bottom:8px;display:block}
-#cdnBig{font-size:4rem;font-weight:900;color:#f80;text-align:center;height:0;overflow:hidden;transition:height .25s,opacity .25s;opacity:0}
-#cdnBig.visible{height:72px;opacity:1;margin-bottom:8px}
-.heat-settings{background:#1a1a1a;border-radius:8px;padding:10px;margin-bottom:10px}
-.heat-settings h2{font-size:.65rem;color:#666;text-transform:uppercase;margin-bottom:8px}
-.heat-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
-.heat-row label{font-size:.78rem;color:#888;width:120px;flex-shrink:0}
-.heat-row input[type=number]{background:#0f0f0f;color:#4fc;border:1px solid #333;border-radius:4px;padding:6px 8px;width:80px;font-size:.9rem;font-weight:700}
-.heat-row input[type=number]:focus{border-color:#4fc;outline:none}
-.heat-row span{font-size:.78rem;color:#666}
-.apply-btn{background:#267;padding:6px 16px;font-size:.8rem;margin-top:4px;float:right}
-.tests{margin-top:10px}
-.test-row{background:#1a1a1a;border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:.8rem;display:flex;justify-content:space-between;align-items:center}
-.badge{font-size:.65rem;padding:2px 5px;border-radius:8px;background:#222;margin-right:2px;display:inline-block}
-.cls-badge{background:#3a2550;color:#d8a;font-weight:700}
-.dl{color:#4fc;text-decoration:none;font-weight:700}
-#impulseBar{height:5px;background:#222;border-radius:3px;margin-top:5px}
-#impulseBarFill{height:100%;background:#fa0;border-radius:3px;width:0%;transition:width .15s}
-</style>
-</head>
-<body>
-<h1>Hamownia v3.4</h1>
-<div id="stbar">Laczenie...</div>
-<div id="cdnBig">5</div>
-<div class="btns">
-<button class="btn-tare" onclick="cmd('tare')">TARE</button>
-<button class="btn-start" onclick="cmd('start')">START</button>
-<button class="btn-stop" onclick="cmd('stop')">STOP</button>
-<button id="btnHeat" onclick="toggleHeat()">GRZALKA</button>
-</div>
-<div class="heat-settings">
-<h2>Ustawienia grzalki</h2>
-<div class="heat-row"><label>Czas grzania (s)</label>
-<input type="number" id="inpTime" min="1" max="60" value="10"><span>sekund</span></div>
-<div class="heat-row"><label>Moc PWM (%)</label>
-<input type="number" id="inpPwr" min="0" max="100" value="100"><span>procent</span></div>
-<div class="heat-row"><label>Opóźnienie (s)</label>
-<input type="number" id="inpDelay" min="0" max="30" value="5"><span>sekund</span></div>
-<button class="apply-btn" onclick="sendHeatSettings()">Zastosuj</button>
-<div style="clear:both"></div>
-</div>
-<div class="grid">
-<div class="card"><h2>Sila</h2><div class="val" id="force">--</div><small>N</small></div>
-<div class="card"><h2>Peak</h2><div class="val" id="peak">--</div><small>N</small></div>
-<div class="card full"><h2>Impuls (live)</h2><div class="val impulse" id="impulse">0</div><small>Ns</small>
-<div id="impulseBar"><div id="impulseBarFill"></div></div></div>
-<div class="card"><h2>Klasa</h2><div class="val cls" id="cls">--</div></div>
-<div class="card"><h2>Srednia</h2><div class="val" id="avg">--</div><small>N</small></div>
-<div class="card"><h2>VIN</h2><div class="val" id="vin">--</div><small>V</small></div>
-<div class="card"><h2>Bateria</h2><div class="val" id="bat">--</div><small>V</small></div>
-<div class="card full"><h2>Wykres</h2><canvas id="chart"></canvas></div>
-</div>
-<div class="tests"><h2 style="font-size:.8rem;color:#444;margin-bottom:8px">OSTATNIE 3 TESTY</h2><div id="testList">Ladowanie...</div></div>
-<script>
-const wsUrl='ws://'+location.hostname+'/ws';
-let socket,MAX_PTS=600,pts=[],impulsePeak=1,wasRec=false,cdnActive=false;
-function connect(){socket=new WebSocket(wsUrl);socket.onmessage=onMsg;socket.onclose=()=>{document.getElementById('stbar').textContent='Rozlaczono...';setTimeout(connect,3000);};}
-connect();
-function onMsg(e){
- const d=JSON.parse(e.data);
- document.getElementById('force').textContent=(+d.force).toFixed(1);
- document.getElementById('peak').textContent=(+d.peak).toFixed(1);
- document.getElementById('avg').textContent=(+d.avg).toFixed(1);
- document.getElementById('impulse').textContent=(+d.impulse).toFixed(3);
- document.getElementById('cls').textContent=d.class;
- if(+d.impulse>impulsePeak)impulsePeak=+d.impulse;
- document.getElementById('impulseBarFill').style.width=impulsePeak>0?Math.min(100,+d.impulse/impulsePeak*100)+'%':'0%';
- const vinEl=document.getElementById('vin');vinEl.textContent=(+d.vin).toFixed(2);vinEl.className='val'+(+d.vin<11.5?' warn':'');
- const batEl=document.getElementById('bat');batEl.textContent=(+d.bat).toFixed(2);batEl.className='val'+(+d.bat<3.3?' danger':+d.bat<3.5?' warn':'');
- let st='Stan: '+d.state;if(d.rec)st+=' REC '+d.samples+' t='+(+d.burn).toFixed(1)+'s';if(+d.heaterLeft>=0)st+=' GRZANIE: '+d.heaterLeft+'s';
- document.getElementById('stbar').textContent=st;
- if(d.rec){pts.push(+d.force);if(pts.length>MAX_PTS)pts.shift();drawChart();wasRec=true;}else if(wasRec){wasRec=false;drawChart();loadTests();}
- const cdn=+d.countdown,cdnEl=document.getElementById('cdnBig');
- if(cdn>=0){cdnEl.textContent=cdn>0?cdn:'FIRE';cdnEl.classList.add('visible');cdnActive=true;}else if(cdnActive){cdnActive=false;setTimeout(()=>cdnEl.classList.remove('visible'),900);}
- const btn=document.getElementById('btnHeat');
- if(cdn>=0){btn.className='cdn';btn.textContent=' '+cdn+'s...';}else if(+d.heaterLeft>=0){btn.className='on';btn.textContent=' GRZANIE '+d.heaterLeft+'s';}else{btn.className='';btn.textContent='GRZALKA';}
-}
-function cmd(c){fetch('/api/'+c,{method:'POST'}).then(()=>{if(c==='stop')setTimeout(loadTests,500);});}
-function sendHeatSettings(){
- const t=parseInt(document.getElementById('inpTime').value)||10;
- const p=parseInt(document.getElementById('inpPwr').value)||100;
- const d=parseInt(document.getElementById('inpDelay').value)||5;
- document.getElementById('inpTime').value=Math.max(1,Math.min(60,t));
- document.getElementById('inpPwr').value=Math.max(0,Math.min(100,p));
- document.getElementById('inpDelay').value=Math.max(0,Math.min(30,d));
- return fetch('/api/heatset?time='+document.getElementById('inpTime').value+'&pwr='+document.getElementById('inpPwr').value+'&delay='+document.getElementById('inpDelay').value,{method:'POST'});
-}
-function toggleHeat(){sendHeatSettings().then(()=>fetch('/api/heat',{method:'POST'}));}
-function drawChart(){
- const c=document.getElementById('chart'),ctx=c.getContext('2d');
- c.width=c.offsetWidth||320;c.height=c.offsetHeight||190;ctx.clearRect(0,0,c.width,c.height);
- if(pts.length<2)return;const max=Math.max(...pts,0.1);ctx.strokeStyle='#222';ctx.lineWidth=1;
- for(let i=1;i<4;i++){const y=c.height*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke();ctx.fillStyle='#444';ctx.font='10px sans-serif';ctx.fillText((max*(4-i)/4).toFixed(0)+'N',2,y-2);}
- ctx.strokeStyle='#4fc';ctx.lineWidth=2;ctx.beginPath();
- pts.forEach((v,i)=>{const x=i/(pts.length-1)*c.width,y=c.height-(v/max)*c.height*0.88-4;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.stroke();
- ctx.lineTo(c.width,c.height);ctx.lineTo(0,c.height);ctx.closePath();ctx.fillStyle='rgba(68,255,200,0.06)';ctx.fill();
-}
-function loadTests(){fetch('/api/tests').then(r=>r.json()).then(list=>{const el=document.getElementById('testList'),v=list.filter(t=>t&&t.name);if(!v.length){el.textContent='Brak.';return;}el.innerHTML=v.map(t=>'<div class="test-row"><div><strong>'+t.name+'</strong><span class="badge cls-badge">'+t.motor_class+'</span><br><span class="badge">Peak: '+t.peak_N.toFixed(1)+' N</span><span class="badge">t: '+t.burn_s.toFixed(2)+' s</span></div><a class="dl" href="/download?id='+t.id+'" target="_blank">CSV</a></div>').join('');}).catch(()=>{});}
-loadTests();setInterval(loadTests,8000);window.addEventListener('resize',drawChart);
-</script>
-</body>
-</html>
-)rawhtml";
+#define HTML_TEMPLATE \
+"<!DOCTYPE html>" \
+"<html lang=\"pl\">" \
+"<head>" \
+"<meta charset=\"UTF-8\">" \
+"<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" \
+"<title>Hamownia</title>" \
+"<style>" \
+"*{box-sizing:border-box;margin:0;padding:0}" \
+"body{font-family:sans-serif;background:#0f0f0f;color:#e0e0e0;padding:12px}" \
+"h1{font-size:1.3rem;margin-bottom:10px;color:#4fc}" \
+".grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px}" \
+".full{grid-column:1/-1}" \
+".card{background:#1a1a1a;border-radius:8px;padding:10px}" \
+".card h2{font-size:.65rem;color:#666;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}" \
+".val{font-size:1.9rem;font-weight:700;color:#4fc;font-variant-numeric:tabular-nums}" \
+".val.warn{color:#f90}.val.danger{color:#f44}" \
+".val.impulse{color:#fa0;font-size:2.2rem}.val.cls{color:#d8a;font-size:2.4rem}" \
+"canvas{width:100%;height:190px;background:#111;border-radius:6px;display:block;margin-top:6px}" \
+".btns{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}" \
+"button{padding:10px 16px;border:none;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:600;color:#fff;transition:opacity .15s}" \
+"button:active{opacity:.6}" \
+".btn-tare{background:#267}.btn-start{background:#246}.btn-stop{background:#622}" \
+"#btnHeat{background:#853;min-width:150px}" \
+"#btnHeat.cdn{background:#a60;animation:pulse .4s infinite alternate}" \
+"#btnHeat.on{background:#f50;animation:pulse .2s infinite alternate}" \
+"@keyframes pulse{from{opacity:.55}to{opacity:1}}" \
+"#stbar{font-size:.8rem;padding:5px 10px;background:#1a1a1a;border-radius:6px;margin-bottom:8px;display:block}" \
+"#cdnBig{font-size:4rem;font-weight:900;color:#f80;text-align:center;height:0;overflow:hidden;transition:height .25s,opacity .25s;opacity:0}" \
+"#cdnBig.visible{height:72px;opacity:1;margin-bottom:8px}" \
+".heat-settings{background:#1a1a1a;border-radius:8px;padding:10px;margin-bottom:10px}" \
+".heat-settings h2{font-size:.65rem;color:#666;text-transform:uppercase;margin-bottom:8px}" \
+".heat-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}" \
+".heat-row label{font-size:.78rem;color:#888;width:120px;flex-shrink:0}" \
+".heat-row input[type=number]{background:#0f0f0f;color:#4fc;border:1px solid #333;border-radius:4px;padding:6px 8px;width:80px;font-size:.9rem;font-weight:700}" \
+".heat-row input[type=number]:focus{border-color:#4fc;outline:none}" \
+".heat-row span{font-size:.78rem;color:#666}" \
+".apply-btn{background:#267;padding:6px 16px;font-size:.8rem;margin-top:4px;float:right}" \
+".tests{margin-top:10px}" \
+".test-row{background:#1a1a1a;border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:.8rem;display:flex;justify-content:space-between;align-items:center}" \
+".badge{font-size:.65rem;padding:2px 5px;border-radius:8px;background:#222;margin-right:2px;display:inline-block}" \
+".cls-badge{background:#3a2550;color:#d8a;font-weight:700}" \
+".dl{color:#4fc;text-decoration:none;font-weight:700}" \
+"#impulseBar{height:5px;background:#222;border-radius:3px;margin-top:5px}" \
+"#impulseBarFill{height:100%;background:#fa0;border-radius:3px;width:0%;transition:width .15s}" \
+"</style>" \
+"</head>" \
+"<body>" \
+"<h1>Hamownia v3.4</h1>" \
+"<div id=\"stbar\">Laczenie...</div>" \
+"<div id=\"cdnBig\">5</div>" \
+"<div class=\"btns\">" \
+"<button class=\"btn-tare\" onclick=\"cmd('tare')\">TARE</button>" \
+"<button class=\"btn-start\" onclick=\"cmd('start')\">START</button>" \
+"<button class=\"btn-stop\" onclick=\"cmd('stop')\">STOP</button>" \
+"<button id=\"btnHeat\" onclick=\"toggleHeat()\">GRZALKA</button>" \
+"</div>" \
+"<div class=\"heat-settings\">" \
+"<h2>Ustawienia grzalki</h2>" \
+"<div class=\"heat-row\"><label>Czas grzania (s)</label>" \
+"<input type=\"number\" id=\"inpTime\" min=\"1\" max=\"60\" value=\"%d\"><span>sekund</span></div>" \
+"<div class=\"heat-row\"><label>Moc PWM (%)</label>" \
+"<input type=\"number\" id=\"inpPwr\" min=\"0\" max=\"100\" value=\"%d\"><span>procent</span></div>" \
+"<div class=\"heat-row\"><label>Opóźnienie (s)</label>" \
+"<input type=\"number\" id=\"inpDelay\" min=\"0\" max=\"30\" value=\"%d\"><span>sekund</span></div>" \
+"<button class=\"apply-btn\" onclick=\"sendHeatSettings()\">Zastosuj</button>" \
+"<div style=\"clear:both\"></div>" \
+"</div>" \
+"<div class=\"grid\">" \
+"<div class=\"card\"><h2>Sila</h2><div class=\"val\" id=\"force\">--</div><small>N</small></div>" \
+"<div class=\"card\"><h2>Peak</h2><div class=\"val\" id=\"peak\">--</div><small>N</small></div>" \
+"<div class=\"card full\"><h2>Impuls (live)</h2><div class=\"val impulse\" id=\"impulse\">0</div><small>Ns</small>" \
+"<div id=\"impulseBar\"><div id=\"impulseBarFill\"></div></div></div>" \
+"<div class=\"card\"><h2>Klasa</h2><div class=\"val cls\" id=\"cls\">--</div></div>" \
+"<div class=\"card\"><h2>Srednia</h2><div class=\"val\" id=\"avg\">--</div><small>N</small></div>" \
+"<div class=\"card\"><h2>VIN</h2><div class=\"val\" id=\"vin\">--</div><small>V</small></div>" \
+"<div class=\"card\"><h2>Bateria</h2><div class=\"val\" id=\"bat\">--</div><small>V</small></div>" \
+"<div class=\"card full\"><h2>Wykres</h2><canvas id=\"chart\"></canvas></div>" \
+"</div>" \
+"<div class=\"tests\"><h2 style=\"font-size:.8rem;color:#444;margin-bottom:8px\">OSTATNIE 3 TESTY</h2><div id=\"testList\">Ladowanie...</div></div>" \
+"<script>" \
+"const wsUrl='ws://'+location.hostname+'/ws';" \
+"let socket,MAX_PTS=600,pts=[],impulsePeak=1,wasRec=false,cdnActive=false;" \
+"function connect(){socket=new WebSocket(wsUrl);socket.onmessage=onMsg;socket.onclose=()=>{document.getElementById('stbar').textContent='Rozlaczono...';setTimeout(connect,3000);};}" \
+"connect();" \
+"function onMsg(e){" \
+" const d=JSON.parse(e.data);" \
+" document.getElementById('force').textContent=(+d.force).toFixed(1);" \
+" document.getElementById('peak').textContent=(+d.peak).toFixed(1);" \
+" document.getElementById('avg').textContent=(+d.avg).toFixed(1);" \
+" document.getElementById('impulse').textContent=(+d.impulse).toFixed(3);" \
+" document.getElementById('cls').textContent=d.class;" \
+" if(+d.impulse>impulsePeak)impulsePeak=+d.impulse;" \
+" document.getElementById('impulseBarFill').style.width=impulsePeak>0?Math.min(100,+d.impulse/impulsePeak*100)+'%':'0%';" \
+" const vinEl=document.getElementById('vin');vinEl.textContent=(+d.vin).toFixed(2);vinEl.className='val'+(+d.vin<11.5?' warn':'');" \
+" const batEl=document.getElementById('bat');batEl.textContent=(+d.bat).toFixed(2);batEl.className='val'+(+d.bat<3.3?' danger':+d.bat<3.5?' warn':'');" \
+" let st='Stan: '+d.state;if(d.rec)st+=' REC '+d.samples+' t='+(+d.burn).toFixed(1)+'s';if(+d.heaterLeft>=0)st+=' GRZANIE: '+d.heaterLeft+'s';" \
+" document.getElementById('stbar').textContent=st;" \
+" if(d.rec){pts.push(+d.force);if(pts.length>MAX_PTS)pts.shift();drawChart();wasRec=true;}else if(wasRec){wasRec=false;drawChart();loadTests();}" \
+" const cdn=+d.countdown,cdnEl=document.getElementById('cdnBig');" \
+" if(cdn>=0){cdnEl.textContent=cdn>0?cdn:'FIRE';cdnEl.classList.add('visible');cdnActive=true;}else if(cdnActive){cdnActive=false;setTimeout(()=>cdnEl.classList.remove('visible'),900);}" \
+" const btn=document.getElementById('btnHeat');" \
+" if(cdn>=0){btn.className='cdn';btn.textContent=' '+cdn+'s...';}else if(+d.heaterLeft>=0){btn.className='on';btn.textContent=' GRZANIE '+d.heaterLeft+'s';}else{btn.className='';btn.textContent='GRZALKA';}" \
+"}" \
+"function cmd(c){fetch('/api/'+c,{method:'POST'}).then(()=>{if(c==='stop')setTimeout(loadTests,500);});}" \
+"function sendHeatSettings(){" \
+" const t=parseInt(document.getElementById('inpTime').value)||%d;" \
+" const p=parseInt(document.getElementById('inpPwr').value)||%d;" \
+" const d=parseInt(document.getElementById('inpDelay').value)||%d;" \
+" document.getElementById('inpTime').value=Math.max(1,Math.min(60,t));" \
+" document.getElementById('inpPwr').value=Math.max(0,Math.min(100,p));" \
+" document.getElementById('inpDelay').value=Math.max(0,Math.min(30,d));" \
+" return fetch('/api/heatset?time='+document.getElementById('inpTime').value+'&pwr='+document.getElementById('inpPwr').value+'&delay='+document.getElementById('inpDelay').value,{method:'POST'});" \
+"}" \
+"function toggleHeat(){sendHeatSettings().then(()=>fetch('/api/heat',{method:'POST'}));}" \
+"function drawChart(){" \
+" const c=document.getElementById('chart'),ctx=c.getContext('2d');" \
+" c.width=c.offsetWidth||320;c.height=c.offsetHeight||190;ctx.clearRect(0,0,c.width,c.height);" \
+" if(pts.length<2)return;const max=Math.max(...pts,0.1);ctx.strokeStyle='#222';ctx.lineWidth=1;" \
+" for(let i=1;i<4;i++){const y=c.height*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke();ctx.fillStyle='#444';ctx.font='10px sans-serif';ctx.fillText((max*(4-i)/4).toFixed(0)+'N',2,y-2);}" \
+" ctx.strokeStyle='#4fc';ctx.lineWidth=2;ctx.beginPath();" \
+" pts.forEach((v,i)=>{const x=i/(pts.length-1)*c.width,y=c.height-(v/max)*c.height*0.88-4;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.stroke();" \
+" ctx.lineTo(c.width,c.height);ctx.lineTo(0,c.height);ctx.closePath();ctx.fillStyle='rgba(68,255,200,0.06)';ctx.fill();" \
+"}" \
+"function loadTests(){fetch('/api/tests').then(r=>r.json()).then(list=>{const el=document.getElementById('testList'),v=list.filter(t=>t&&t.name);if(!v.length){el.textContent='Brak.';return;}el.innerHTML=v.map(t=>'<div class=\"test-row\"><div><strong>'+t.name+'</strong><span class=\"badge cls-badge\">'+t.motor_class+'</span><br><span class=\"badge\">Peak: '+t.peak_N.toFixed(1)+' N</span><span class=\"badge\">t: '+t.burn_s.toFixed(2)+' s</span></div><a class=\"dl\" href=\"/download?id='+t.id+'\" target=\"_blank\">CSV</a></div>').join('');}).catch(()=>{});}" \
+"loadTests();setInterval(loadTests,8000);window.addEventListener('resize',drawChart);" \
+"</script>" \
+"</body>" \
+"</html>"
 
 // ============================================================
 //  SETUP v3.4
@@ -579,7 +578,7 @@ void setup() {
   Serial.print("WiFi");
   WiFi.disconnect(true); delay(200);
   WiFi.mode(WIFI_STA); delay(100);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   wifiConnectStart = millis();
   bool wifiOk = false;
   while (millis() - wifiConnectStart < 15000) {
@@ -613,6 +612,15 @@ void setup() {
     }
   }
 
+  // Build HTML with config values injected
+  snprintf(indexHtmlBuffer, sizeof(indexHtmlBuffer), HTML_TEMPLATE,
+    HEATER_DEFAULT_DURATION_S,
+    HEATER_DEFAULT_DUTY_PERCENT,
+    HEATER_DEFAULT_COUNTDOWN_S,
+    HEATER_DEFAULT_DURATION_S,
+    HEATER_DEFAULT_DUTY_PERCENT,
+    HEATER_DEFAULT_COUNTDOWN_S);
+
   // WebSocket
   ws.onEvent([](AsyncWebSocket*, AsyncWebSocketClient* client, AwsEventType t, void*, uint8_t*, size_t) {
     if (t == WS_EVT_CONNECT) Serial.printf("WS #%u connected\n", client->id());
@@ -621,7 +629,9 @@ void setup() {
   server.addHandler(&ws);
 
   // HTTP routes
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", FPSTR(INDEX_HTML)); });
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) {
+    r->send(200, "text/html", indexHtmlBuffer);
+  });
   server.on("/api/tare", HTTP_POST, [](AsyncWebServerRequest* r) {
     devState = STATE_TARE; ledState = LED_TARE; ledTimer = millis();
     scale.tare(5); forceFiltered = 0; forcePeak = 0; liveImpulse = 0; forceAvg = 0;

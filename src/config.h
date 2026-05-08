@@ -157,7 +157,13 @@
 #define HEATER_MAX_DURATION_MS      60000
 
 // Default heating duration (ms)
-#define HEATER_DEFAULT_DURATION_MS  5000
+#define HEATER_DEFAULT_DURATION_MS  1
+
+// Default heating duration (seconds) - used for web UI input default
+#define HEATER_DEFAULT_DURATION_S   (HEATER_DEFAULT_DURATION_MS / 1000)
+
+// Default heater duty (%)
+#define HEATER_DEFAULT_DUTY_PERCENT  100
 
 // Default countdown duration (seconds)
 #define HEATER_DEFAULT_COUNTDOWN_S  5
