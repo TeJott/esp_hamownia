@@ -1,7 +1,10 @@
 // ============================================================
-//  HAMOWNIA v3.3 - ESP32-C3 SuperMini
-//  Naprawiono: pojedynczy init SD/WiFi, bootLog -> oledBootLine,
-//              StaticJsonDocument -> JsonDocument, ledcAttach -> ledcAttachPin
+//  HAMOWNIA v3.4 - ESP32-C3 SuperMini
+//  Changes:
+//  - Heater no longer blocked by low battery (works at GZERO/0V)
+//  - Heater settings: text input boxes instead of sliders
+//  - Recording STOP saves CSV and auto-refreshes test list
+//  - Input fields don't get overwritten while user is editing
 // ============================================================
 
 #include <Arduino.h>
@@ -29,7 +32,7 @@ const float VIN_LOW_V = 11.5f;
 
 unsigned long heaterMaxOnMs = 10000;
 int heaterPwmDuty = 100;
-const unsigned long HEATER_COUNTDOWN_MS = 5000;
+unsigned long HEATER_COUNTDOWN_MS = 5000;
 
 // ============================================================
 //  PINY
@@ -54,6 +57,17 @@ const unsigned long HEATER_COUNTDOWN_MS = 5000;
 const float DIVIDER_RATIO = (100.0f + 33.0f) / 33.0f;
 const float ADC_REF_V = 3.3f;
 const int ADC_MAX = 4095;
+
+// ADC kalibracja - korekcja offsetu ESP32-C3
+// GPIO0 (logic battery): ADC czyta za nisko -> dodajemy 0.60V
+// GPIO1 (heater battery): ADC czyta za wysoko -> odejmujemy 0.36V
+float adcCorrection(int pin, float rawVoltage) {
+    if (pin == PIN_BAT_ADC2) {  // Heater battery - GPIO1
+        return rawVoltage - 0.36f;
+    } else {  // Logic battery - GPIO0
+        return rawVoltage + 0.60f;
+    }
+}
 
 // ============================================================
 //  WSZYSTKIE ZMIENNE GLOBALNE
@@ -166,7 +180,8 @@ const char* motorClass(float ns) {
 float readVoltage(int pin) {
   long s = 0;
   for (int i = 0; i < 16; i++) { s += analogRead(pin); delay(1); }
-  return (s / 16.0f / ADC_MAX) * ADC_REF_V * DIVIDER_RATIO;
+  float raw = (s / 16.0f / ADC_MAX) * ADC_REF_V * DIVIDER_RATIO;
+  return adcCorrection(pin, raw);
 }
 
 // ============================================================
@@ -245,7 +260,7 @@ void saveCurrentTest() {
 // ============================================================
 void heaterOff() {
   heaterOn = false; heaterCdn = false;
-  ledcWrite(PIN_HEATER_EN, 0);
+  ledcWrite(0, 0);
   devState = (recording ? STATE_RECORDING : STATE_READY);
   ledState = (recording ? LED_RECORDING : LED_IDLE);
   Serial.println("GRZALKA OFF");
@@ -256,15 +271,10 @@ void handleHeater() {
   if (heaterCdn) {
     if (now - heaterCdnStart >= HEATER_COUNTDOWN_MS) {
       heaterCdn = false;
-      if (batVoltage > BAT_CRIT_V) {
-        heaterOn = true; heaterOnStart = now;
-        devState = STATE_HEATER_ON; ledState = LED_HEATER_ON;
-        ledcWrite(PIN_HEATER_EN, (heaterPwmDuty * 255) / 100);
-        Serial.printf("GRZALKA ON: %lus %d%%\n", heaterMaxOnMs / 1000, heaterPwmDuty);
-      } else {
-        Serial.println("Grzalka blok: za niskie napiecie baterii");
-        devState = STATE_READY; ledState = LED_ERROR_SD; ledTimer = millis();
-      }
+      heaterOn = true; heaterOnStart = now;
+      devState = STATE_HEATER_ON; ledState = LED_HEATER_ON;
+      ledcWrite(0, (heaterPwmDuty * 255) / 100);
+      Serial.printf("GRZALKA ON: %lus %d%%\n", heaterMaxOnMs / 1000, heaterPwmDuty);
     }
   }
   if (heaterOn && now - heaterOnStart >= heaterMaxOnMs) { heaterOff(); }
@@ -407,10 +417,11 @@ button:active{opacity:.6}
 #cdnBig.visible{height:72px;opacity:1;margin-bottom:8px}
 .heat-settings{background:#1a1a1a;border-radius:8px;padding:10px;margin-bottom:10px}
 .heat-settings h2{font-size:.65rem;color:#666;text-transform:uppercase;margin-bottom:8px}
-.slider-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.slider-row label{font-size:.78rem;color:#888;width:130px;flex-shrink:0}
-.slider-row input[type=range]{flex:1;accent-color:#4fc}
-.slider-row span{font-size:.9rem;font-weight:700;color:#4fc;width:55px;text-align:right}
+.heat-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+.heat-row label{font-size:.78rem;color:#888;width:120px;flex-shrink:0}
+.heat-row input[type=number]{background:#0f0f0f;color:#4fc;border:1px solid #333;border-radius:4px;padding:6px 8px;width:80px;font-size:.9rem;font-weight:700}
+.heat-row input[type=number]:focus{border-color:#4fc;outline:none}
+.heat-row span{font-size:.78rem;color:#666}
 .apply-btn{background:#267;padding:6px 16px;font-size:.8rem;margin-top:4px;float:right}
 .tests{margin-top:10px}
 .test-row{background:#1a1a1a;border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:.8rem;display:flex;justify-content:space-between;align-items:center}
@@ -422,7 +433,7 @@ button:active{opacity:.6}
 </style>
 </head>
 <body>
-<h1>⚙ Hamownia v3.3</h1>
+<h1>Hamownia v3.4</h1>
 <div id="stbar">Laczenie...</div>
 <div id="cdnBig">5</div>
 <div class="btns">
@@ -433,10 +444,12 @@ button:active{opacity:.6}
 </div>
 <div class="heat-settings">
 <h2>Ustawienia grzalki</h2>
-<div class="slider-row"><label>Czas grzania (s)</label>
-<input type="range" id="slTime" min="1" max="60" value="10" oninput="v1.textContent=this.value+'s'"><span id="v1">10s</span></div>
-<div class="slider-row"><label>Moc PWM (%)</label>
-<input type="range" id="slPwr" min="10" max="100" step="5" value="100" oninput="v2.textContent=this.value+'%'"><span id="v2">100%</span></div>
+<div class="heat-row"><label>Czas grzania (s)</label>
+<input type="number" id="inpTime" min="1" max="60" value="10"><span>sekund</span></div>
+<div class="heat-row"><label>Moc PWM (%)</label>
+<input type="number" id="inpPwr" min="0" max="100" value="100"><span>procent</span></div>
+<div class="heat-row"><label>Opóźnienie (s)</label>
+<input type="number" id="inpDelay" min="0" max="30" value="5"><span>sekund</span></div>
 <button class="apply-btn" onclick="sendHeatSettings()">Zastosuj</button>
 <div style="clear:both"></div>
 </div>
@@ -470,16 +483,22 @@ function onMsg(e){
  const batEl=document.getElementById('bat');batEl.textContent=(+d.bat).toFixed(2);batEl.className='val'+(+d.bat<3.3?' danger':+d.bat<3.5?' warn':'');
  let st='Stan: '+d.state;if(d.rec)st+=' REC '+d.samples+' t='+(+d.burn).toFixed(1)+'s';if(+d.heaterLeft>=0)st+=' GRZANIE: '+d.heaterLeft+'s';
  document.getElementById('stbar').textContent=st;
- if(d.rec){pts.push(+d.force);if(pts.length>MAX_PTS)pts.shift();drawChart();wasRec=true;}else if(wasRec){wasRec=false;drawChart();}
+ if(d.rec){pts.push(+d.force);if(pts.length>MAX_PTS)pts.shift();drawChart();wasRec=true;}else if(wasRec){wasRec=false;drawChart();loadTests();}
  const cdn=+d.countdown,cdnEl=document.getElementById('cdnBig');
  if(cdn>=0){cdnEl.textContent=cdn>0?cdn:'FIRE';cdnEl.classList.add('visible');cdnActive=true;}else if(cdnActive){cdnActive=false;setTimeout(()=>cdnEl.classList.remove('visible'),900);}
  const btn=document.getElementById('btnHeat');
  if(cdn>=0){btn.className='cdn';btn.textContent=' '+cdn+'s...';}else if(+d.heaterLeft>=0){btn.className='on';btn.textContent=' GRZANIE '+d.heaterLeft+'s';}else{btn.className='';btn.textContent='GRZALKA';}
- document.getElementById('slTime').value=d.heaterTime;document.getElementById('v1').textContent=d.heaterTime+'s';
- document.getElementById('slPwr').value=d.heaterDuty;document.getElementById('v2').textContent=d.heaterDuty+'%';
 }
-function cmd(c){fetch('/api/'+c,{method:'POST'});}
-function sendHeatSettings(){const t=document.getElementById('slTime').value,p=document.getElementById('slPwr').value;return fetch('/api/heatset?time='+t+'&pwr='+p,{method:'POST'});}
+function cmd(c){fetch('/api/'+c,{method:'POST'}).then(()=>{if(c==='stop')setTimeout(loadTests,500);});}
+function sendHeatSettings(){
+ const t=parseInt(document.getElementById('inpTime').value)||10;
+ const p=parseInt(document.getElementById('inpPwr').value)||100;
+ const d=parseInt(document.getElementById('inpDelay').value)||5;
+ document.getElementById('inpTime').value=Math.max(1,Math.min(60,t));
+ document.getElementById('inpPwr').value=Math.max(0,Math.min(100,p));
+ document.getElementById('inpDelay').value=Math.max(0,Math.min(30,d));
+ return fetch('/api/heatset?time='+document.getElementById('inpTime').value+'&pwr='+document.getElementById('inpPwr').value+'&delay='+document.getElementById('inpDelay').value,{method:'POST'});
+}
 function toggleHeat(){sendHeatSettings().then(()=>fetch('/api/heat',{method:'POST'}));}
 function drawChart(){
  const c=document.getElementById('chart'),ctx=c.getContext('2d');
@@ -490,7 +509,7 @@ function drawChart(){
  pts.forEach((v,i)=>{const x=i/(pts.length-1)*c.width,y=c.height-(v/max)*c.height*0.88-4;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});ctx.stroke();
  ctx.lineTo(c.width,c.height);ctx.lineTo(0,c.height);ctx.closePath();ctx.fillStyle='rgba(68,255,200,0.06)';ctx.fill();
 }
-function loadTests(){fetch('/api/tests').then(r=>r.json()).then(list=>{const el=document.getElementById('testList'),v=list.filter(t=>t&&t.name);if(!v.length){el.textContent='Brak.';return;}el.innerHTML=v.map(t=>'<div class="test-row"><div><strong>'+t.name+'</strong><span class="badge cls-badge">'+t.motor_class+'</span><br><span class="badge">Peak: '+t.peak_N.toFixed(1)+' N</span><span class="badge">t: '+t.burn_s.toFixed(2)+' s</span></div><a class="dl" href="/download?id='+t.id+'">CSV</a></div>').join('');}).catch(()=>{});}
+function loadTests(){fetch('/api/tests').then(r=>r.json()).then(list=>{const el=document.getElementById('testList'),v=list.filter(t=>t&&t.name);if(!v.length){el.textContent='Brak.';return;}el.innerHTML=v.map(t=>'<div class="test-row"><div><strong>'+t.name+'</strong><span class="badge cls-badge">'+t.motor_class+'</span><br><span class="badge">Peak: '+t.peak_N.toFixed(1)+' N</span><span class="badge">t: '+t.burn_s.toFixed(2)+' s</span></div><a class="dl" href="/download?id='+t.id+'" target="_blank">CSV</a></div>').join('');}).catch(()=>{});}
 loadTests();setInterval(loadTests,8000);window.addEventListener('resize',drawChart);
 </script>
 </body>
@@ -498,12 +517,12 @@ loadTests();setInterval(loadTests,8000);window.addEventListener('resize',drawCha
 )rawhtml";
 
 // ============================================================
-//  SETUP v3.3
+//  SETUP v3.4
 // ============================================================
 void setup() {
   Serial.begin(115200);
   delay(500);
-  Serial.println("\n=== HAMOWNIA v3.3 ===");
+  Serial.println("\n=== HAMOWNIA v3.4 ===");
 
   pinMode(PIN_STATUS_LED, OUTPUT);
   pinMode(PIN_BT2, INPUT_PULLUP);
@@ -523,7 +542,7 @@ void setup() {
     oled.clearDisplay();
     oled.setTextSize(2); oled.setTextColor(SSD1306_WHITE);
     oled.setCursor(4, 0); oled.print("HAMOWNIA");
-    oled.setTextSize(1); oled.setCursor(20, 18); oled.print("v3.3 boot...");
+    oled.setTextSize(1); oled.setCursor(20, 18); oled.print("v3.4 boot...");
     oled.display(); delay(1000);
     oled.clearDisplay();
     oled.setCursor(0, 0); oled.print("-- HAMOWNIA BOOT --");
@@ -620,7 +639,12 @@ void setup() {
   server.on("/api/heat", HTTP_POST, [](AsyncWebServerRequest* r) {
     if (heaterOn || heaterCdn) { heaterOff(); r->send(200, "application/json", "{\"on\":false}"); }
     else {
-      if (batVoltage < BAT_CRIT_V) { r->send(200, "application/json", "{\"on\":false,\"err\":\"low_bat\"}"); return; }
+      // Auto-start recording immediately when heater is engaged
+      if (!recording && sampleCount == 0) {
+        sampleCount = 0; liveImpulse = 0; forceAvg = 0; forcePeak = 0; lastSampleTime = 0;
+        testStartMs = millis(); recording = true;
+        Serial.println("HEAT: REC recording auto-start");
+      }
       heaterCdn = true; heaterCdnStart = millis();
       devState = STATE_HEATER_COUNTDOWN; ledState = LED_HEATER_CDN; ledTimer = millis();
       Serial.printf("COUNTDOWN: %lus %d%%\n", heaterMaxOnMs / 1000, heaterPwmDuty);
@@ -629,9 +653,10 @@ void setup() {
   });
   server.on("/api/heatset", HTTP_POST, [](AsyncWebServerRequest* r) {
     auto g = [&](const char* k)->String{ if(r->hasParam(k,true)) return r->getParam(k,true)->value(); if(r->hasParam(k)) return r->getParam(k)->value(); return ""; };
-    String ts = g("time"), ps = g("pwr");
+    String ts = g("time"), ps = g("pwr"), ds = g("delay");
     if (ts.length()) { int t = ts.toInt(); if (t >= 1 && t <= 60) heaterMaxOnMs = (unsigned long)t * 1000; }
-    if (ps.length()) { int p = ps.toInt(); if (p >= 10 && p <= 100) heaterPwmDuty = p; }
+    if (ps.length()) { int p = ps.toInt(); if (p >= 0 && p <= 100) heaterPwmDuty = p; }
+    if (ds.length()) { int d = ds.toInt(); if (d >= 0 && d <= 30) HEATER_COUNTDOWN_MS = (unsigned long)d * 1000; }
     char buf[64]; snprintf(buf, sizeof(buf), "{\"time\":%lu,\"pwr\":%d}", heaterMaxOnMs / 1000, heaterPwmDuty);
     r->send(200, "application/json", buf);
   });

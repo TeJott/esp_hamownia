@@ -76,9 +76,12 @@
 #define LOGIC_BATTERY_LOW_VOLTAGE   3.3f     // Low voltage warning for logic battery
 #define HEATER_BATTERY_LOW_VOLTAGE  10.0f    // Low voltage lockout for heater battery
 
-// Calibration correction factors (adjust if needed)
-#define LOGIC_BATTERY_CALIBRATION   1.0f
-#define HEATER_BATTERY_CALIBRATION  1.0f
+// ADC offset correction (ESP32-C3 ADC is inaccurate)
+// Measured errors:
+//   GPIO0 (logic batt): ADC reads ~0.60V too LOW   → add offset
+//   GPIO1 (heater batt): ADC reads ~0.36V too HIGH  → subtract offset
+#define ADC_CORRECTION_LOGIC_BAT    -0.33f   // Add to raw reading
+#define ADC_CORRECTION_HEATER_BAT   -0.36f  // Subtract from raw reading
 
 // =============================================================================
 // HX711 LOAD CELL CONFIG
