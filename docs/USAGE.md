@@ -40,7 +40,7 @@
 | Wolne bicie serca (200/800ms) | Gotowy (Idle) |
 | Podwójne krótkie | Tare wykonane |
 | Równomierne 250/250ms | Nagrywanie |
-| Przeważnie ON (150/50ms) | Grzejnik aktywny |
+| Przeważnie ON (150/50ms) | Zapalnik aktywny |
 | Potrójne mrugnięcia + pauza | Błąd |
 | Długie-krótkie | Niskie napięcie baterii |
 | Powolne podwójne + długa pauza | Tryb AP |
@@ -50,6 +50,6 @@
 | Komunikat OLED | Przyczyna | Rozwiązanie |
 |---|---|---|
 | `BAT LOW` | Bateria logiki < 3.3V | Naładuj baterię |
-| `HEATER LOCKED` | Bateria grzejnika < 10V | Naładuj baterię 12V |
+| `HEATER LOCKED` | Bateria zapalnika < 3.3V | Naładuj baterię |
 | `SD ERROR` | Brak karty SD | Włóż kartę SD |
 | `HX711 ERROR` | Brak tensometru | Sprawdź podłączenie |
