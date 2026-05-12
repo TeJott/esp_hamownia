@@ -15,11 +15,11 @@
 - LED: szybkie podwójne mrugnięcie (potwierdzenie)
 - Odczekaj chwilę aż wartość ustabilizuje się na 0.00 kg
 
-### Krok 2 — Nagrzewanie opony (opcjonalne)
+### Krok 2 — Zapalnik przez strone WEB (opcjonalne)
 - Ustaw czas grzania i moc PWM w web UI
 - Kliknij **START HEATER** lub przytrzymaj przycisk (long press)
-- LED: szybkie mrugnięcia — odliczanie | przeważnie ON — grzanie
-- Grzejnik automatycznie wyłącza się po upływie czasu
+- LED: szybkie mrugnięcia — odliczanie 
+- Zapalnik automatycznie wyłącza się po upływie czasu
 
 ### Krok 3 — Nagrywanie
 - Kliknij **START RECORDING** w web UI
@@ -40,7 +40,7 @@
 | Wolne bicie serca (200/800ms) | Gotowy (Idle) |
 | Podwójne krótkie | Tare wykonane |
 | Równomierne 250/250ms | Nagrywanie |
-| Przeważnie ON (150/50ms) | Grzejnik aktywny |
+| Przeważnie ON (150/50ms) | Zapalnik aktywny |
 | Potrójne mrugnięcia + pauza | Błąd |
 | Długie-krótkie | Niskie napięcie baterii |
 | Powolne podwójne + długa pauza | Tryb AP |
@@ -50,6 +50,6 @@
 | Komunikat OLED | Przyczyna | Rozwiązanie |
 |---|---|---|
 | `BAT LOW` | Bateria logiki < 3.3V | Naładuj baterię |
-| `HEATER LOCKED` | Bateria grzejnika < 10V | Naładuj baterię 12V |
+| `HEATER LOCKED` | Bateria zapalnika < 3.3V | Naładuj baterię |
 | `SD ERROR` | Brak karty SD | Włóż kartę SD |
 | `HX711 ERROR` | Brak tensometru | Sprawdź podłączenie |
