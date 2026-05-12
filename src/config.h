@@ -257,13 +257,19 @@
 // WI-FI CONFIG
 // =============================================================================
 
-// Wi-Fi credentials (replace with your network)
-#define WIFI_SSID                   "PLACEHOLDER"
-#define WIFI_PASSWORD               "PLACEHOLDER"
+// Wi-Fi credentials — OVERRIDE in src/config_local.h (not tracked by git)
+// Copy src/config_local.example.h to src/config_local.h and fill your values
+#define WIFI_SSID                   ""
+#define WIFI_PASSWORD               ""
 
 // AP mode credentials
 #define AP_SSID                     "Hamownia"
 #define AP_PASSWORD                 "hamownia123"
+
+// Load local overrides (ignored by git — see .gitignore)
+#if __has_include("config_local.h")
+  #include "config_local.h"
+#endif
 
 // Wi-Fi connection timeout (ms) - how long to wait for STA in setup
 #define WIFI_CONNECT_TIMEOUT_MS     15000
