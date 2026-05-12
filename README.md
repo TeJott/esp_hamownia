@@ -1,4 +1,4 @@
-# 🔥 ESP Hamownia — Tester ziągu silników rakietowych na ESP32-C3
+# 🔥 ESP Hamownia — Tester ciągu silników rakietowych na ESP32-C3
 
 > Przenośna hamownia silnikowa z zapalnikie, odczytem siły przez blok tensometryczny 20kg ze wzacniacze HX711, wyświetlaczem OLED, kartą SD i interfejsem webowym przez Wi-Fi.
 
