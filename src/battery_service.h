@@ -56,8 +56,8 @@ public:
         lastUpdateMs = now;
         
         // Read and average multiple samples
-        logicVoltage = readBatteryVoltage(PIN_BAT_ADC, LOGIC_BATTERY_CALIBRATION);
-        heaterVoltage = readBatteryVoltage(PIN_BAT_ADC2, HEATER_BATTERY_CALIBRATION);
+        logicVoltage = readBatteryVoltage(PIN_BAT_ADC, ADC_CORRECTION_LOGIC_BAT);
+        heaterVoltage = readBatteryVoltage(PIN_BAT_ADC2, ADC_CORRECTION_HEATER_BAT);
         
         // Check low voltage thresholds
         logicLow = logicVoltage < LOGIC_BATTERY_LOW_VOLTAGE;
@@ -127,26 +127,26 @@ private:
     /**
      * @brief Read battery voltage from ADC pin with averaging
      * @param pin ADC pin to read
-     * @param calibration Calibration factor
+     * @param correctionOffset ADC voltage correction (additive, per config.h)
      * @return Battery voltage in volts
      */
-    float readBatteryVoltage(int pin, float calibration) {
+    float readBatteryVoltage(int pin, float correctionOffset) {
         uint32_t sum = 0;
-        
+
         // Take multiple samples and average
         for (int i = 0; i < BATTERY_ADC_SAMPLES; i++) {
             sum += analogRead(pin);
         }
-        
+
         float avgAdc = (float)sum / BATTERY_ADC_SAMPLES;
-        
-        // Convert ADC value to voltage
-        // V_adc = avgAdc * (V_ref / ADC_resolution)
+
+        // Convert ADC value to voltage at the ADC pin
         float adcVoltage = avgAdc * (ADC_REFERENCE_VOLTAGE / ADC_RESOLUTION);
-        
-        // Apply voltage divider multiplier and calibration
-        float batteryVoltage = adcVoltage * BATTERY_DIVIDER_MULTIPLIER * calibration;
-        
+
+        // Apply ADC offset correction, then voltage divider multiplier
+        float correctedAdc = adcVoltage + correctionOffset;
+        float batteryVoltage = correctedAdc * BATTERY_DIVIDER_MULTIPLIER;
+
         return batteryVoltage;
     }
 };

@@ -174,12 +174,67 @@ Edytuj `src/config.h`:
 ```
 > ⚠️ Nie commituj pliku z prawdziwym hasłem! Dodaj `config_local.h` do `.gitignore`.
 
-### 2. Kalibracja tensometru
-Połóż znany ciężar i odczytaj surową wartość ADC, następnie oblicz:
-```cpp
-#define HX711_SCALE_FACTOR  (znana_masa_g / odczyt_ADC)
+### 2. Kalibracja belki tensometrycznej (HX711)
+
+Biblioteka `bogde/HX711` używa konwencji **dzielnika**:
+
 ```
-Przyklad: masa=1000g, odczyt=200000 → `HX711_SCALE_FACTOR = 0.005f`
+get_units() = (read_average() - tare_offset) / SCALE
+SCALE = surowe_jednostki_ADC / znana_masa
+```
+
+#### Metoda A: Przez stronę WWW (zalecana)
+
+1. Uruchom urządzenie i otwórz panel webowy
+2. Kliknij **TARE** przy nieobciążonej belce
+3. Połóż **znany ciężarek** (np. odważnik 1 kg, 2 kg, 5 kg)
+4. W polu "Znana masa (kg)" wpisz wagę ciężarka
+5. Kliknij **Kalibruj** — nowy współczynnik zapisze się w NVS (przetrwa restart)
+6. Sprawdź, czy odczyt na wyświetlaczu zgadza się z ciężarkiem
+
+#### Metoda B: Ręcznie w `src/config.h`
+
+1. Ustaw `HX711_SCALE` na `1.0f` i wgraj firmware
+2. Przez Serial Monitor (115200 baud) obserwuj odczyty
+3. Połóż znany ciężarek i odczytaj surową wartość
+4. Oblicz: `SCALE = odczyt / masa_w_kg`
+5. Wpisz obliczoną wartość do `config.h`:
+
+```cpp
+// Belka 20 kg z HX711 (gain=128, VCC=3.3V)
+// Typowa wartość SCALE: 200 000 – 500 000
+#define HX711_SCALE  430000.0f   // <- wpisz swoją wartość
+```
+
+#### Przykład kalibracji
+
+| Ciężarek | Surowy odczyt | SCALE |
+|---|---|---|
+| 1.0 kg | 428 000 | 428 000 |
+| 2.0 kg | 860 000 | 430 000 |
+| 5.0 kg | 2 140 000 | 428 000 |
+
+**Średnia:** 428 667 → ustaw `HX711_SCALE 428667.0f`
+
+#### Kolory przewodów belki tensometrycznej
+
+| Kolor | Sygnał | Podłączenie do HX711 |
+|---|---|---|
+| Czerwony | E+ (wzbudzenie +) | E+ |
+| Czarny | E- (wzbudzenie -) | E- |
+| Zielony | A+ (sygnał +) | A+ |
+| Biały | A- (sygnał -) | A- |
+
+> Jeśli po kalibracji odczyty są **ujemne** przy prawidłowym obciążeniu, zamień przewody **E+ z E-** miejscami.
+
+#### Najczęstsze problemy
+
+| Problem | Rozwiązanie |
+|---|---|
+| Odczyt nie zmienia się | Sprawdź zasilanie HX711 (VCC=3.3V, GND) |
+| Odczyt skacze | Dodaj kondensator 100 nF między VCC a GND HX711 |
+| Nie wraca do 0 po zdjęciu ciężaru | Belka przeciążona mechanicznie lub histereza |
+| `HX711 BRAK` w Serial Monitorze | Sprawdź przewody DT (GPIO7) i SCK (GPIO8) |
 
 ### 3. Parametry grzejnika
 ```cpp

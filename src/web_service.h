@@ -298,8 +298,8 @@ private:
     void broadcastStatus(const AppContext& ctx) {
         String json = "{";
         json += "\"state\":\"" + String(stateToString(ctx.currentState)) + "\",";
-        json += "\"force\":" + String(ctx.forceFiltered * HX711_SCALE_FACTOR, 2) + ",";
-        json += "\"peak\":" + String(ctx.forcePeak * HX711_SCALE_FACTOR, 2) + ",";
+        json += "\"force\":" + String(ctx.forceFiltered, 2) + ",";
+        json += "\"peak\":" + String(ctx.forcePeak, 2) + ",";
         json += "\"logicBatt\":" + String(ctx.logicBatteryVoltage, 2) + ",";
         json += "\"heaterBatt\":" + String(ctx.heaterBatteryVoltage, 2) + ",";
         json += "\"heaterRunning\":" + String(ctx.heaterRunning ? "true" : "false") + ",";

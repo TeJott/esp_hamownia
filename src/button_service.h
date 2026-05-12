@@ -38,9 +38,9 @@ public:
      * @brief Initialize button pin
      */
     void begin() {
-        pinMode(PIN_BUTTON, INPUT_PULLUP);  // Button connects to GND, active LOW
-        lastState = digitalRead(PIN_BUTTON);
-        DEBUG_PRINT("[BUTTON] Service initialized on GPIO" + String(PIN_BUTTON));
+        pinMode(PIN_BT2, INPUT_PULLUP);  // Button connects to GND, active LOW
+        lastState = digitalRead(PIN_BT2);
+        DEBUG_PRINT("[BUTTON] Service initialized on GPIO" + String(PIN_BT2));
     }
     
     /**
@@ -56,7 +56,7 @@ public:
      */
     ButtonEvent update() {
         ButtonEvent event = ButtonEvent::NONE;
-        int reading = digitalRead(PIN_BUTTON);
+        int reading = digitalRead(PIN_BT2);
         uint32_t now = millis();
         
         // Check for state change (with debounce)
@@ -111,7 +111,7 @@ public:
      * @brief Check if button is currently pressed
      */
     bool isPressed() {
-        return digitalRead(PIN_BUTTON) == LOW;
+        return digitalRead(PIN_BT2) == LOW;
     }
 
 private:

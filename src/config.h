@@ -32,7 +32,7 @@
 #define PIN_BAT_ADC2        1   // GPIO1 - BAT_IN / Heater battery
 
 // Physical button (only BT2 exists, BT1 is ignored)
-#define PIN_BUTTON          2   // GPIO2 - BT2, active LOW
+#define PIN_BT2                2   // GPIO2 - BT2, active LOW
 
 // OLED I2C pins
 #define PIN_OLED_SCL        3   // GPIO3
@@ -77,32 +77,54 @@
 #define HEATER_BATTERY_LOW_VOLTAGE  10.0f    // Low voltage lockout for heater battery
 
 // ADC offset correction (ESP32-C3 ADC is inaccurate)
-// Measured errors:
-//   GPIO0 (logic batt): ADC reads ~0.60V too LOW   → add offset
-//   GPIO1 (heater batt): ADC reads ~0.36V too HIGH  → subtract offset
-#define ADC_CORRECTION_LOGIC_BAT    -0.33f   // Add to raw reading
-#define ADC_CORRECTION_HEATER_BAT   -0.36f  // Subtract from raw reading
+// Both ADC pins need -0.36V correction
+#define ADC_CORRECTION_LOGIC_BAT    -0.36f
+#define ADC_CORRECTION_HEATER_BAT   -0.36f
 
 // =============================================================================
 // HX711 LOAD CELL CONFIG
 // =============================================================================
 
 // HX711 gain setting (Channel A, Gain 128 is default)
+// 128 = Channel A, gain 128 (±20mV full scale at 5V AVDD)
+//  64 = Channel A, gain 64  (±40mV full scale)
+//  32 = Channel B, gain 32  (fixed)
 #define HX711_GAIN                  128
 
-// Calibration scale factor (units per count)
-// User must calibrate with known weight
-// Example: if 1000g reads 200000 counts, scale = 1000.0 / 200000.0 = 0.005
-#define HX711_SCALE_FACTOR          0.005f
+// =============================================================================
+// KALIBRACJA BELKI TENSOMETRYCZNEJ
+// =============================================================================
+// Biblioteka bogde/HX711 używa konwencji DZIELNIKA:
+//
+//   get_units() = (read_average() - tare_offset) / SCALE
+//
+// SCALE = surowe_jednostki_ADC / znana_masa
+//
+// Procedura kalibracji:
+// 1. Ustaw ponizsze HX711_SCALE na 1.0f
+// 2. Wgraj firmware i poczekaj na tare
+// 3. Poloz ZNANY ciezar na belce (np. odważnik 1 kg)
+// 4. Odczytaj wartosc w Serial Monitorze
+// 5. Oblicz: SCALE = odczytana_wartosc / masa_ciezarka_w_kg
+//    Przyklad: odczytano 430000, ciezar 1.0 kg → SCALE = 430000.0f
+// 6. Wpisz obliczona wartosc ponizej i wgraj ponownie
+// 7. Dla dokladniejszej kalibracji powtorz z roznymi ciezarami i usrednij
+//
+// Dla belki 20 kg typowa wartosc SCALE zawiera sie w przedziale:
+//   200 000 – 500 000  (przy gain=128, VCC=3.3V)
+//
+// UWAGA: Jesli po kalibracji odczyty sa UJEMNE przy prawidlowym
+// obciazeniu, zamien przewody E+ z E- na belce tensometrycznej.
+#define HX711_SCALE                 430000.0f   // <-- ZASTAP WLASNA WARTOSCIA
 
-// Tare offset (will be updated at runtime)
+// Tare offset (ustawiany automatycznie przy starcie przez scale.tare())
 #define HX711_TARE_OFFSET           0.0f
 
 // Moving average filter window size
 #define HX711_FILTER_WINDOW         10
 
-// Sampling interval (ms)
-#define HX711_SAMPLE_INTERVAL_MS    50
+// Sampling interval (ms) — 12ms = ~83 Hz
+#define HX711_SAMPLE_INTERVAL_MS    12
 
 // Force unit string
 #define FORCE_UNIT                  "kg"
@@ -122,7 +144,7 @@
 #define OLED_I2C_FREQUENCY          400000
 
 // Display update interval (ms)
-#define OLED_UPDATE_INTERVAL_MS     100
+#define OLED_UPDATE_INTERVAL_MS     200
 
 // =============================================================================
 // SD CARD CONFIG
@@ -135,13 +157,13 @@
 #define MAX_RECORDINGS              3
 
 // CSV file prefix
-#define CSV_FILE_PREFIX             "/test_"
+#define CSV_FILE_PREFIX             "/test"
 
 // CSV file extension
 #define CSV_FILE_EXTENSION          ".csv"
 
 // Metadata file
-#define METADATA_FILE               "/metadata.json"
+#define METADATA_FILE               "/index.json"
 
 // =============================================================================
 // HEATER CONTROL CONFIG
@@ -151,13 +173,13 @@
 #define HEATER_PWM_FREQUENCY        1000
 
 // Default PWM duty cycle (%)
-#define HEATER_DEFAULT_DUTY         50
+#define HEATER_DEFAULT_DUTY         100
 
 // Maximum allowed heating duration (ms) - safety limit
 #define HEATER_MAX_DURATION_MS      60000
 
 // Default heating duration (ms)
-#define HEATER_DEFAULT_DURATION_MS  1
+#define HEATER_DEFAULT_DURATION_MS  1000
 
 // Default heating duration (seconds) - used for web UI input default
 #define HEATER_DEFAULT_DURATION_S   (HEATER_DEFAULT_DURATION_MS / 1000)
@@ -226,10 +248,10 @@
 // =============================================================================
 
 // Debounce time (ms)
-#define BUTTON_DEBOUNCE_MS          50
+#define BUTTON_DEBOUNCE_MS          30
 
 // Long press threshold (ms)
-#define BUTTON_LONG_PRESS_MS        1000
+#define BUTTON_LONG_PRESS_MS        1500
 
 // =============================================================================
 // WI-FI CONFIG
@@ -276,14 +298,14 @@
 // =============================================================================
 
 // Status update interval for WebSocket (ms)
-#define WS_UPDATE_INTERVAL_MS       500
+#define WS_UPDATE_INTERVAL_MS       100
 
 // =============================================================================
 // RECORDING CONFIG
 // =============================================================================
 
 // Recording sample interval (ms)
-#define RECORDING_SAMPLE_INTERVAL_MS    100
+#define RECORDING_SAMPLE_INTERVAL_MS    12
 
 // =============================================================================
 // DEBUG CONFIG

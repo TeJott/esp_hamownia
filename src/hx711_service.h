@@ -20,7 +20,7 @@
  */
 class HX711Service {
 public:
-    HX711Service() : scale(), scaleFactor(HX711_SCALE_FACTOR), tareOffset(0.0f),
+    HX711Service() : scale(), scaleFactor(HX711_SCALE), tareOffset(0.0f),
                      rawValue(0.0f), filteredValue(0.0f), lastSampleTime(0),
                      filterIndex(0), filterSum(0.0f), ready(false) {
         // Initialize filter buffer
@@ -93,9 +93,9 @@ public:
         }
         lastSampleTime = now;
         
-        // Get raw value
+        // Get value in calibrated units
         if (scale.is_ready()) {
-            rawValue = scale.get_value(1);  // Single reading
+            rawValue = scale.get_units(1);  // get_units() = (raw - offset) / SCALE
             
             // Apply moving average filter
             applyFilter();
@@ -120,7 +120,7 @@ public:
      * @brief Get force in units (with scale factor applied)
      */
     float getForce() const {
-        return filteredValue * scaleFactor;
+        return filteredValue;  // already in correct units from get_units()
     }
     
     /**
@@ -172,11 +172,11 @@ public:
         if (!ready) return;
         
         // Get current reading
-        float currentReading = scale.get_value(10);  // Average 10 readings
-        
-        // Calculate new scale factor
+        float currentReading = scale.get_value(10);  // Average 10 readings (raw - offset)
+
+        // Calculate new scale factor: SCALE = raw_counts / known_weight
         if (knownWeight != 0 && currentReading != 0) {
-            scaleFactor = knownWeight / currentReading;
+            scaleFactor = currentReading / knownWeight;
             scale.set_scale(scaleFactor);
             DEBUG_PRINTF("[HX711] Calibration complete. Scale factor: %.6f\n", scaleFactor);
         }

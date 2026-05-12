@@ -184,15 +184,15 @@ private:
         display.setTextSize(2);
         display.setTextColor(SSD1306_WHITE);
         display.setCursor(0, 12);
-        display.print(ctx.forceFiltered * HX711_SCALE_FACTOR, 1);
+        display.print(ctx.forceFiltered, 1);
         display.print(" ");
         display.print(FORCE_UNIT);
-        
+
         // Peak force (smaller)
         display.setTextSize(1);
         display.setCursor(0, 32);
         display.print("Peak: ");
-        display.print(ctx.forcePeak * HX711_SCALE_FACTOR, 1);
+        display.print(ctx.forcePeak, 1);
         display.print(" ");
         display.print(FORCE_UNIT);
     }
