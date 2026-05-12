@@ -7,7 +7,7 @@
 ## 📸 Zdjęcia projektu
 
 ### Schemat PCB
-> 📷 *Wstaw tutaj zdjęcie schematu PCB (np. z KiCad)*
+
 
 ```
 docs/images/schematic.png
@@ -16,17 +16,17 @@ docs/images/schematic.png
 ![Schemat PCB](docs/images/schematic.png)
 
 ### Płytka PCB — widok 3D
-> 📷 *Wstaw tutaj render 3D płytki z KiCad*
+
 
 ![PCB 3D](docs/images/pcb_3d.png)
 
 ### Zmontowane urządzenie
-> 📷 *Wstaw tutaj zdjęcie gotowego urządzenia*
+
 
 ![Gotowe urządzenie](docs/images/device_assembled.jpg)
 
 ### Panel webowy (Web UI)
-> 📷 *Screenshot interfejsu webowego*
+
 
 ![Web UI](docs/images/webui_screenshot.png)
 
@@ -34,7 +34,7 @@ docs/images/schematic.png
 
 ## 🎬 Pokaz działania
 
-> 📹 *Wstaw tutaj link do wideo demonstracyjnego (YouTube/GitHub)*
+
 
 [![Demo hamowni](docs/images/video_thumbnail.jpg)](https://www.youtube.com/watch?v=TWOJ_LINK)
 
