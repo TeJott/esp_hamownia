@@ -560,11 +560,17 @@ void setup() {
   delay(400);
   loadCalibration();  // wczytaj kalibracje z NVS (nadpisuje domyslna z config.h)
   scale.set_scale(calibrationFactor);
+  Serial.printf("HX711: SCALE=%.1f (z NVS: %s)\n", calibrationFactor, calibrationFactor == HX711_SCALE ? "nie" : "tak");
+  // Odczyt surowy przed tare — powinien byc ~5-15 mln przy VCC=3.3V
+  long rawBeforeTare = scale.read_average(5);
+  Serial.printf("HX711: raw_before_tare=%ld\n", rawBeforeTare);
   scale.tare(10);
   delay(100);
   float testReading = scale.get_units(3);
-  bool hxOk = !isnan(testReading);
-  Serial.printf("HX711: %s (%.2f)\n", hxOk ? "OK" : "BRAK", testReading);
+  long rawAfterTare = scale.read_average(5);
+  bool hxOk = !isnan(testReading) && !isinf(testReading) && rawAfterTare > 100;
+  Serial.printf("HX711: %s  units=%.2f  raw_after_tare=%ld\n",
+                hxOk ? "OK" : "BRAK", testReading, rawAfterTare);
   if (oledOk) oledBootLine(hxOk ? "HX711 OK" : "HX711 BRAK!", 1, hxOk);
 
   // SD (JEDEN RAZ)
@@ -711,7 +717,7 @@ void setup() {
       r->send(400, "application/json", "{\"success\":false,\"message\":\"Waga musi byc 0-20 kg\"}");
       return;
     }
-    float raw = scale.get_value(10);  // srednia z 10 odczytow (raw - offset, bez dzielenia przez SCALE)
+    float raw = fabs(scale.get_value(10));  // bezwzgledna wartosc — dziala z kazda polaryzacja belki
     if (raw == 0 || isnan(raw)) {
       r->send(500, "application/json", "{\"success\":false,\"message\":\"Brak odczytu z HX711\"}");
       return;
@@ -754,15 +760,31 @@ void loop() {
     sampleTimer = now;
     if (scale.is_ready()) {
       forceRaw = scale.get_units(1);
-      if (forceRaw < 0) forceRaw = 0;
-      forceFiltered = EMA_ALPHA * forceRaw + (1.0f - EMA_ALPHA) * forceFiltered;
-      if (forceFiltered > forcePeak) forcePeak = forceFiltered;
-      if (recording && sampleCount < MAX_SAMPLES) {
-        float t_now = (now - testStartMs) / 1000.0f;
-        if (sampleCount > 0) { float dt = t_now - lastSampleTime; if (dt > 0 && dt < 0.5f) liveImpulse += forceFiltered * dt; }
-        lastSampleTime = t_now;
-        if (t_now > 0.001f) forceAvg = liveImpulse / t_now;
-        samples[sampleCount] = { t_now, forceFiltered }; sampleCount++;
+      // Guard against NaN/inf (bad wiring, missing HX711, zero SCALE)
+      if (isnan(forceRaw) || isinf(forceRaw)) {
+        static unsigned long lastNanLog = 0;
+        if (now - lastNanLog > 2000) {
+          lastNanLog = now;
+          Serial.printf("HX711: NaN/inf! SCALE=%.1f  Sprawdz DT(7)/SCK(8) i zasilanie\n", calibrationFactor);
+        }
+        if (isnan(forceFiltered)) forceFiltered = 0; // reset skazonego filtra
+      } else {
+        forceRaw = fabs(forceRaw);  // handle obu polaryzacji belki
+        forceFiltered = EMA_ALPHA * forceRaw + (1.0f - EMA_ALPHA) * forceFiltered;
+        if (forceFiltered > forcePeak) forcePeak = forceFiltered;
+        if (recording && sampleCount < MAX_SAMPLES) {
+          float t_now = (now - testStartMs) / 1000.0f;
+          if (sampleCount > 0) { float dt = t_now - lastSampleTime; if (dt > 0 && dt < 0.5f) liveImpulse += forceFiltered * dt; }
+          lastSampleTime = t_now;
+          if (t_now > 0.001f) forceAvg = liveImpulse / t_now;
+          samples[sampleCount] = { t_now, forceFiltered }; sampleCount++;
+        }
+      }
+    } else {
+      static unsigned long lastNotReadyLog = 0;
+      if (now - lastNotReadyLog > 5000) {
+        lastNotReadyLog = now;
+        Serial.println("HX711: NOT READY — DT(7)/SCK(8) lub zasilanie odlaczone?");
       }
     }
   }
